@@ -20,12 +20,12 @@
 /*
  * Description:
  *	This file can be applied to following platforms:
- *	CONFIG_PLATFORM_ARM_SUNXI Series platform 
- *	
+ *	CONFIG_PLATFORM_ARM_SUNXI Series platform
+ *
  */
- 
+
 #include <drv_types.h>
-#include <mach/sys_config.h>
+#include <linux/sys_config.h>
 
 #ifdef CONFIG_PLATFORM_ARM_SUNxI
 extern int sw_usb_disable_hcd(__u32 usbc_no);
@@ -43,8 +43,9 @@ static script_item_u item;
 #ifdef CONFIG_PLATFORM_ARM_SUN8I
 extern int sunxi_usb_disable_hcd(__u32 usbc_no);
 extern int sunxi_usb_enable_hcd(__u32 usbc_no);
-extern void wifi_pm_power(int on);
-static script_item_u item;
+extern void sunxi_wlan_usb_set_power(int on);
+extern int sunxi_wlan_usb_get_bus_index(void);
+static int usb_busnum = -1;
 #endif
 
 
@@ -57,23 +58,23 @@ int platform_wifi_power_on(void)
 	{
 		/* ----------get usb_wifi_usbc_num------------- */
 		ret = script_parser_fetch("usb_wifi_para", "usb_wifi_usbc_num", (int *)&usb_wifi_host, 64);
-		if(ret != 0){
-			DBG_8192C("ERR: script_parser_fetch usb_wifi_usbc_num failed\n");
+		if (ret != 0) {
+			RTW_INFO("ERR: script_parser_fetch usb_wifi_usbc_num failed\n");
 			ret = -ENOMEM;
 			goto exit;
 		}
-		DBG_8192C("sw_usb_enable_hcd: usbc_num = %d\n", usb_wifi_host);
+		RTW_INFO("sw_usb_enable_hcd: usbc_num = %d\n", usb_wifi_host);
 		sw_usb_enable_hcd(usb_wifi_host);
 	}
-#endif //CONFIG_RTL8723A
-#endif //CONFIG_PLATFORM_ARM_SUNxI
+#endif /* CONFIG_RTL8723A */
+#endif /* CONFIG_PLATFORM_ARM_SUNxI */
 
 #if defined(CONFIG_PLATFORM_ARM_SUN6I) || defined(CONFIG_PLATFORM_ARM_SUN7I)
 	{
 		script_item_value_type_e type;
 
 		type = script_get_item("wifi_para", "wifi_usbc_id", &item);
-		if(SCIRPT_ITEM_VALUE_TYPE_INT != type){
+		if (SCIRPT_ITEM_VALUE_TYPE_INT != type) {
 			printk("ERR: script_get_item wifi_usbc_id failed\n");
 			ret = -ENOMEM;
 			goto exit;
@@ -82,33 +83,33 @@ int platform_wifi_power_on(void)
 		printk("sw_usb_enable_hcd: usbc_num = %d\n", item.val);
 		wifi_pm_power(1);
 		mdelay(10);
-	
-		#if !(defined(CONFIG_RTL8723A)) && !(defined(CONFIG_RTL8723B))
+
+#if !(defined(CONFIG_RTL8723A)) && !(defined(CONFIG_RTL8723B))
 		sw_usb_enable_hcd(item.val);
-		#endif
+#endif
 	}
-#endif //defined(CONFIG_PLATFORM_ARM_SUN6I) || defined(CONFIG_PLATFORM_ARM_SUN7I)
+#endif /* defined(CONFIG_PLATFORM_ARM_SUN6I) || defined(CONFIG_PLATFORM_ARM_SUN7I) */
 
 #if defined(CONFIG_PLATFORM_ARM_SUN8I)
 	{
-		script_item_value_type_e type;
-
-		type = script_get_item("wifi_para", "wifi_usbc_id", &item);
-		if(SCIRPT_ITEM_VALUE_TYPE_INT != type){
-			printk("ERR: script_get_item wifi_usbc_id failed\n");
+		usb_busnum = sunxi_wlan_usb_get_bus_index();
+		if (usb_busnum < 0 && usb_busnum > 2)
+		{
+			printk("unsupported wlan_usb_busnum (%u)\n", usb_busnum);
 			ret = -ENOMEM;
 			goto exit;
 		}
 
-		printk("sw_usb_enable_hcd: usbc_num = %d\n", item.val);
-		wifi_pm_power(1);
+		printk("sw_usb_enable_hcd: usbc_num = %d\n", usb_busnum);
+
+		sunxi_wlan_usb_set_power(1);
 		mdelay(10);
-	
-		#if !(defined(CONFIG_RTL8723A)) && !(defined(CONFIG_RTL8723B))
-		sunxi_usb_enable_hcd(item.val);
-		#endif
+
+#if !(defined(CONFIG_RTL8723A)) && !(defined(CONFIG_RTL8723B))
+		//sunxi_usb_enable_hcd(usb_busnum);
+#endif
 	}
-#endif //CONFIG_PLATFORM_ARM_SUN8I
+#endif /* CONFIG_PLATFORM_ARM_SUN8I */
 
 exit:
 	return ret;
@@ -119,24 +120,23 @@ void platform_wifi_power_off(void)
 
 #ifdef CONFIG_PLATFORM_ARM_SUNxI
 #ifndef CONFIG_RTL8723A
-	DBG_8192C("sw_usb_disable_hcd: usbc_num = %d\n", usb_wifi_host);
+	RTW_INFO("sw_usb_disable_hcd: usbc_num = %d\n", usb_wifi_host);
 	sw_usb_disable_hcd(usb_wifi_host);
-#endif //ifndef CONFIG_RTL8723A
-#endif	//CONFIG_PLATFORM_ARM_SUNxI
+#endif /* ifndef CONFIG_RTL8723A */
+#endif /* CONFIG_PLATFORM_ARM_SUNxI */
 
 #if defined(CONFIG_PLATFORM_ARM_SUN6I) || defined(CONFIG_PLATFORM_ARM_SUN7I)
 	#if !(defined(CONFIG_RTL8723A)) && !(defined(CONFIG_RTL8723B))
 	sw_usb_disable_hcd(item.val);
 	#endif
 	wifi_pm_power(0);
-#endif //defined(CONFIG_PLATFORM_ARM_SUN6I) || defined(CONFIG_PLATFORM_ARM_SUN7I)
+#endif /* defined(CONFIG_PLATFORM_ARM_SUN6I) || defined(CONFIG_PLATFORM_ARM_SUN7I) */
 
 #if defined(CONFIG_PLATFORM_ARM_SUN8I)
 	#if !(defined(CONFIG_RTL8723A)) && !(defined(CONFIG_RTL8723B))
-	sunxi_usb_disable_hcd(item.val);
+	//sunxi_usb_disable_hcd(usb_busnum);
 	#endif
-	wifi_pm_power(0);
-#endif //defined(CONFIG_PLATFORM_ARM_SUN8I) 
+	sunxi_wlan_usb_set_power(0);
+#endif /* defined(CONFIG_PLATFORM_ARM_SUN8I) */
 
 }
-
